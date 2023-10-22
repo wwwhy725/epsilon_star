@@ -10,7 +10,6 @@ from PIL import Image
 from tqdm.auto import tqdm
 
 from utils import *
-from epsilon_star import epsilon_star
 
 
 # Setting reproducibility
@@ -49,7 +48,7 @@ def weighted_x0(x, t, epsilon, args=args):
     array = result.cpu().detach().numpy()
 
     # 调整数组的形状以适应plt.imshow函数的要求
-    array = array.reshape(b, h, w)
+    array = array.reshape(b, c, h, w)
 
     '''
     fig, axs = plt.subplots(1, b, figsize=(10, 6))

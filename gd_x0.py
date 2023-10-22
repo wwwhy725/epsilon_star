@@ -10,11 +10,22 @@ import copy
 from pathlib import Path
 from random import random
 import random
+from functools import partial
+from collections import namedtuple
+from multiprocessing import cpu_count
 import numpy as np
-from utils import *
 
 import torch
 from torch import nn, einsum
+from torch.cuda.amp import autocast
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+
+from torchvision.transforms import Compose, ToTensor, Lambda
+from torchvision.datasets.mnist import MNIST, FashionMNIST
+from torch.utils.data import Subset
+
+from torch.optim import Adam
 
 from torchvision import transforms as T, utils
 
@@ -27,13 +38,8 @@ from tqdm import trange
 
 from accelerate import Accelerator
 
-from denoising_diffusion_pytorch import Unet, GaussianDiffusion, Trainer
+from utils import *
 
-import tyro
-from config import Args
-
-# load configuration
-args = tyro.cli(Args)
 
 # Getting device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

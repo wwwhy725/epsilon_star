@@ -8,24 +8,18 @@ import numpy as np
 
 import torch
 
-
 from PIL import Image
 from tqdm.auto import tqdm
 
-from epsilon_star import *
 from x_hat import *
-
-from denoising_diffusion_pytorch import Unet, GaussianDiffusion, Trainer
-
 from utils import *
 
-# random seed has been fixed in denoising_diffusion_pytorch
+"""note the random seed?"""
 
 # Getting device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}\t" +
       (f"{torch.cuda.get_device_name(0)}" if torch.cuda.is_available() else "CPU"))
-
 
 # ****************************************
 '''
@@ -48,7 +42,7 @@ def interpolation(
 
     # calculate the L2 distance between interpolation and x_hat
     dist = (intp - cal_x).norm(p=2, dim=(1, 2, 3))
-    dist_np = dist.cpu().numpy()
+    dist_np = dist.cpu().detach().numpy()
     '''
     # 显示图像
     if show_pic:
@@ -78,7 +72,7 @@ def interpolate():
     assert real_x.shape == gen_x.shape
 
     # load diffusion model
-    model, diffusion, trainer = load_model()
+    model, diffusion, trainer = load_model(args=args)
 
     # make sure [-1, 1] and to tensor
     real_x = normalize(real_x)
@@ -139,7 +133,7 @@ def random_direction():
     b, c, h, w = gen_x.shape
 
     # load diffusion model
-    model, diffusion, trainer = load_model(ckpt=ckpt)
+    model, diffusion, trainer = load_model(args=args)
 
     assert (b, c, h, w) == (b, model.channels, diffusion.image_size, diffusion.image_size)
 

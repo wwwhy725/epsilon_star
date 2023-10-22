@@ -8,7 +8,6 @@ from PIL import Image
 import logging
 from utils import *
 
-
 logger = logging.getLogger(__name__)
 
 # to get the closest factors of a   e.g.  12 = 3 * 4 = 2 * 6  what I want is 3,4 rather than 2,6
@@ -56,6 +55,16 @@ def knn_ratio_metric(gen_img:torch.Tensor, train_img:torch.Tensor, n=50, alpha=0
     ratio = top_val[0] / (alpha * (torch.sum(top_val)) / n)
 
     return ratio.item(), top_idx[0].item()
+
+def save_numpy_image(image, path):
+    # normalize image to 0-255
+    image = image - image.min()
+    image /= image.max()
+    image *= 255
+    image = image.astype(np.uint8)
+    # save image
+    image = Image.fromarray(image)
+    image.save(path)
 
 def main():
     # Setup logging
