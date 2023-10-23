@@ -57,25 +57,24 @@ def grad_desc(model, x, noise, args=args):
     gd_lr = args.gd_lr
     gd_epochs = args.gd_epochs
 
-    x_copy = x.clone()
-    optimizer = torch.optim.SGD([x_copy], lr=gd_lr)
+    optimizer = torch.optim.SGD([x], lr=gd_lr)
     criterion = torch.nn.MSELoss()
 
     for epoch in trange(gd_epochs):
         optimizer.zero_grad()
 
-        output = model(x_copy)
+        output = model(x)
         loss = criterion(output, noise)
 
         loss.backward()
         optimizer.step()
     
-    return x_copy
+    return x
 
 
 # initialize x for gradient descent -->
 # 1. random noise  2. generated new images  3. interpolation of generated images and nearest neighbot in train set  4. test images
-def initialize(t, noise, lam, args=args):
+def initialize(t, noise, lam=0.5, args=args):
     choice = args.choice
     gen_path = args.gen_path
     real_path = args.real_path
@@ -84,22 +83,23 @@ def initialize(t, noise, lam, args=args):
     assert choice in ['noise', 'gen', 'intp', 'test']
 
     if choice == 'noise':
-        return torch.randn_like(noise).to(device)
+        noise_np = noise.cpu().detach().numpy()
+        return torch.randn_like(noise).to(device)  # !!!! 这块还有点小问题，用到再调
     elif choice == 'gen':
         gen = np.load(gen_path)
         gen = normalize(gen)  # normalize to [-1, 1]
-        return q_sample(torch.from_numpy(gen).to(device), t, noise)  # forward process
+        return gen, q_sample(torch.from_numpy(gen).to(device), t, noise).to(torch.float32)  # forward process
     elif choice == 'intp':
         gen = np.load(gen_path)
         real = np.load(real_path)
         gen = normalize(gen)  # normalize to [-1, 1]
         real = normalize(real)  # normalize to [-1, 1]
         intp = lam * gen + (1 - lam) * real
-        return q_sample(torch.from_numpy(intp).to(device), t, noise)  # forward process
+        return intp, q_sample(torch.from_numpy(intp).to(device), t, noise).to(torch.float32)  # forward process
     elif choice == 'test':
         test = np.load(test_path)
         test = normalize(test)  # normalize to [-1, 1]
-        return q_sample(torch.from_numpy(test).to(device), t, noise)  # forward process
+        return test, q_sample(torch.from_numpy(test).to(device), t, noise).to(torch.float32)  # forward process
 
 
 # main
@@ -120,22 +120,35 @@ def main():
     noise = torch.randn(batch_size, c, h, w).to(device)
 
     # initialize
-    x_input = initialize(t, noise, args=args)
+    x_ori, x_input = initialize(t, noise, args=args)
+
+    x_input.requires_grad = True
+    noise.requires_grad = True
 
     # loss before gradient descent
     with torch.no_grad():
-        loss_before = (model(x_input) - noise).norm(p=2)
-
-    x_input.requires_grad=True
-    noise.requires_grad = True
+        loss_before = (model(x_input) - noise).norm(p=2, dim=(1, 2, 3)).mean()
     
-
     # gradient descent
     gd_min = grad_desc(model, x_input, noise)
 
     gd_min_back = (gd_min - torch.sqrt(1 - alphas_cumprod[time])) / torch.sqrt(alphas_cumprod[time])
     gd_min_clamp = torch.clamp(gd_min_back, -1, 1)
     result_np = gd_min_clamp.cpu().detach().numpy()  # shape [batch_size, c, h, w]
+    # print(result_np.max(), result_np.min())
+    result_np = (result_np + 1) / 2.0
+    x_ori =  (x_ori + 1) / 2.0
+
+    fig, axs = plt.subplots(2, batch_size, figsize=(15, 15))
+    for i in range(batch_size):
+        axs[0, i].imshow(result_np[i].transpose(1, 2, 0))  # after gradient descent -- a batch of images
+        axs[0, i].axis('off')
+        axs[1, i].imshow(x_ori[i].transpose(1, 2, 0))  # before gradient descent -- a batch of images
+        axs[1, i].axis('off')
+    plt.tight_layout()
+    # save
+    plt.savefig(save_fig_path)
+    plt.show()
     '''
     x_ori = x_np[pic_index]
 
@@ -173,8 +186,11 @@ def main():
     plt.tight_layout()
     plt.show()
     '''
-    loss_after = (model(gd_min) - noise).norm(p=2)
+    loss_after = (model(gd_min) - noise).norm(p=2, dim=(1, 2, 3)).mean()
     print('loss before gd: ', loss_before.item())
     print('loss after gd: ', loss_after.item())
 
+
+if __name__ == '__main__':
+    main()
 
