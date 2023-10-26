@@ -56,6 +56,23 @@ def knn_ratio_metric(gen_img:torch.Tensor, train_img:torch.Tensor, n=50, alpha=0
 
     return ratio.item(), top_idx[0].item()
 
+def get_index(samples, train_imgs):
+    results = []
+    for index, gen_img in tqdm(enumerate(samples), total=len(samples), desc="Processing"):
+        ratio, top_idx = knn_ratio_metric(gen_img, train_imgs)
+        results.append([ratio, index, top_idx])
+
+    return np.array(results)
+
+def calculate_memo(samples, train_imgs, threshold):
+    memo_idx = {}
+    for index, gen_img in tqdm(enumerate(samples), total=len(samples), desc="Processing"):
+        ratio, top_idx = knn_ratio_metric(gen_img, train_imgs)
+        if ratio < threshold:
+            memo_idx[top_idx] = index  # 存下来 train_idx : gen_idx
+    count = len(memo_idx)  # 不算重复的，总共的memorize数量
+    return count, memo_idx
+
 def save_numpy_image(image, path):
     # normalize image to 0-255
     image = image - image.min()
@@ -65,6 +82,39 @@ def save_numpy_image(image, path):
     # save image
     image = Image.fromarray(image)
     image.save(path)
+
+def sample_memo_visualization(samples:torch.Tensor, args=args):
+    # load train data
+    train_np = np.load(args.train_path)
+    train_imgs = torch.from_numpy(train_np).to(device)
+    train_np = (train_np + 1) / 2.0  # normalize to [0, 1]
+
+    # visualization
+    gen_np = samples.cpu().detach().numpy()  # already in [0, 1]
+    samples = samples * 2 - 1.0  # normalize to [-1, 1]
+    results = get_index(samples, train_imgs)
+
+    idx = results[results[:, 0].argsort()][:, 1:]
+    canvas = np.empty((args.sample_num * args.batch_size, args.image_size, 2 * args.image_size, args.channels))
+    row, col = closest_factors(args.sample_num * args.batch_size)
+    for i in range(args.sample_num * args.batch_size):
+        cat = np.concatenate((gen_np[int(idx[i, 0])].transpose(1, 2, 0), train_np[int(idx[i, 1])].transpose(1, 2, 0)), axis=1)
+        canvas[i] = cat
+    canvas = canvas.reshape(row, col, args.image_size, 2*args.image_size, args.channels)
+    canvas = np.transpose(canvas, axes=(0, 2, 1, 3, 4))
+    canvas = canvas.reshape(row*args.image_size, col*2*args.image_size, args.channels)
+
+    # plt.figure(figsize=(30, 30))
+    if args.channels == 1:
+        plt.imshow(canvas, cmap='gray')
+    elif args.channels == 3:
+        plt.imshow(canvas)
+    else:
+        raise ValueError('channels have to be 1 or 3!')
+    plt.axis('off')
+    plt.savefig(args.save_fig_path)
+    plt.show()
+
 
 def main():
     # Setup logging
@@ -82,32 +132,28 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # sample images and save as .npy
-    logger.info('ddpm sampling......')
-    samples = sampling(sample_num=args.sample_num, ckpt=args.ckpt, save_path=args.gen_all_path)
-    logger.info('finished!')
+    need_sample = args.need_sample
+    if need_sample:
+        logger.info('ddpm sampling......')
+        samples = sampling(sample_num=args.sample_num, ckpt=args.ckpt, save_path=args.gen_all_path)
+        logger.info('finished!')
+    else:
+        samples = normalize(np.load(args.gen_all_path))
+        samples = torch.from_numpy(samples).to(device)
     
     # load train data
     train_np = np.load(args.train_path)
     train_imgs = torch.from_numpy(train_np).to(device)
 
     # calculate memorization
-    memo_idx = {}
-    threshold = 1
-    # gen_memo_info = []
-
+    threshold = 1.2
     logger.info('memorization metric: knn ratio')
     logger.info(f'threshold={threshold}')
 
-    results = []
-    for index, gen_img in tqdm(enumerate(samples), total=len(samples), desc="Processing"):
-        ratio, top_idx = knn_ratio_metric(gen_img, train_imgs)
-        results.append([ratio, index, top_idx])
-        if ratio < threshold:
-            # memo_idx.append([index, top_idx])  # 存下来gen-train的索引
-            memo_idx[top_idx] = index  # 存下来 train_idx : gen_idx
-    
-    count = len(memo_idx)  # 不算重复的，总共的memorize数量
+    results = get_index(samples, train_imgs)
 
+    """
+    count, memo_idx = calculate_memo(samples, train_imgs, threshold=threshold)
     if count > 0:
         logger.info(f'number of imgs memorized: {count}')
         for key in memo_idx:
@@ -115,6 +161,7 @@ def main():
 
     else:
         logger.info('no image memorized!')
+    """
 
     # visualization
     results = np.array(results)

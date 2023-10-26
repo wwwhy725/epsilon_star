@@ -8,6 +8,7 @@ from pathlib import Path
 from random import random
 from utils import *
 from epsilon_star_sample import *
+import sample_memo
 
 import torch
 from torch import nn, einsum
@@ -405,4 +406,8 @@ def mix_sample(args=args):
     return gen
 
 if __name__ == '__main__':
+    # mix sample
     gen = mix_sample(args)
+
+    # calculate memorization and visualize
+    sample_memo.sample_memo_visualization(gen, args=args)

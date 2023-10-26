@@ -137,17 +137,16 @@ def load_model(args=args):
     if args.channels == 1:
         model = Unet(
         dim = 64,
-        dim_mults = args.dim_mults,
+        dim_mults = (1, 2),
         channels = args.channels,
-        full_attn = args.full_attn,
+        full_attn = (False, True),
         flash_attn = True
         )
     elif args.channels == 3:
         model = Unet(
         dim = 64,
-        dim_mults = args.dim_mults,
+        dim_mults = (1, 2, 4, 8),
         channels = args.channels,
-        full_attn = args.full_attn,
         flash_attn = True
         )
     else:

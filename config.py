@@ -43,14 +43,17 @@ class Args:
     # training and sampling
     train_num_steps: int = 50000  # training steps  !!not epochs!!
     sample_num: int = 20
+
+    # mix sample
+    t_start: int = 100
+    t_end: int = 200
     
     """float number"""
     train_lr: float = 1e-4  # train learning rate
     gd_lr: float = 1e-1  # gradient descent learning rate
 
-    """tuple"""
-    dim_mults: tuple = (1, 2, 4, 8)  # in UNet   [if channels = 1, dim_mults = (1, 2)]
-    full_attn: tuple = (False, False, False, True)  # in UNet  [if channels = 1, full_attn = (False, True)]
+    """bool"""
+    need_sample: bool = False
 
 
 if __name__ == "__main__":
