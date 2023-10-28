@@ -1001,6 +1001,10 @@ class Trainer(object):
     @property
     def device(self):
         return self.accelerator.device
+    
+    def cal_fid(self):
+        fid_score = self.fid_scorer.fid_score()
+        print(f'fid_score: {fid_score}')
 
     def save(self, milestone):
         if not self.accelerator.is_local_main_process:

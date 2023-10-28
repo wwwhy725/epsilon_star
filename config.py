@@ -43,6 +43,8 @@ class Args:
     # training and sampling
     train_num_steps: int = 50000  # training steps  !!not epochs!!
     sample_num: int = 20
+    ddim_timesteps: int = 250  # 250 steps ddim sampling --> if ddpm, set ddim_timesteps = 1000 or any number larger than 1000
+    num_fid_samples: int = 50000  # sample numbers for fid calculating
 
     # mix sample
     t_start: int = 100
@@ -54,6 +56,7 @@ class Args:
 
     """bool"""
     need_sample: bool = False
+    calculate_fid: bool = False
 
 
 if __name__ == "__main__":

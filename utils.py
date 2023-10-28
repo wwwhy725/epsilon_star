@@ -156,22 +156,24 @@ def load_model(args=args):
         model,
         image_size = args.image_size,
         timesteps = 1000,           # number of steps
+        sampling_timesteps=args.ddim_timesteps,
         objective = 'pred_noise',
         beta_schedule = 'linear'
     )
 
     trainer = Trainer(
         diffusion,
-        args.folder,
+        args.folder,                         # training set folder -- .png
         train_batch_size = args.train_batch_size,
         train_lr = args.train_lr,
-        train_num_steps = 10000,         # total training steps
+        train_num_steps = args.train_num_steps,    # total training steps
         gradient_accumulate_every = 2,    # gradient accumulation steps
         ema_decay = 0.995,                # exponential moving average decay
-        num_samples = 1,
-        results_folder = args.results_folder,
+        num_samples = 256,
+        results_folder = args.results_folder,      # results
         amp = False,                       # turn on mixed precision
-        calculate_fid = False              # whether to calculate fid during training
+        calculate_fid = args.calculate_fid,  # whether to calculate fid during training
+        num_fid_samples=args.num_fid_samples
     )
 
     trainer.load(args.ckpt)
