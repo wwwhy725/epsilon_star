@@ -31,13 +31,14 @@ def compare_norm(args=args, p=2):
         t = torch.full((args.batch_size,), time, device=device).long()
         x = q_sample(gen, t, noise).to(torch.float32)
 
-        norm = torch.norm(model(x, t, x_self_cond=None), p=p)
-        norm_star = torch.norm(epsilon_star(x, t, loader, device), p=p)
+        # here x is a batch of data! e.g. x.shape=[128, 3, 32, 32] --> norm.shape = [128,] --> norm.mean()
+        norm = model(x, t, x_self_cond=None).reshape(args.batch_size, args.channels*args.image_size ** 2).norm(p=p, dim=1)
+        norm_star = epsilon_star(x, t, loader, device).reshape(args.batch_size, args.channels*args.image_size ** 2).norm(p=p, dim=1)
     
         # diff = model(x, t, x_self_cond=None) - epsilon_star(x, t, loader, device)
         # norm = torch.norm(diff, p=p)
-        norms.append(norm.item())
-        norms_star.append(norm_star.item())
+        norms.append(norm.mean().item())
+        norms_star.append(norm_star.mean().item())
     
     plt.plot(times, norms, label='epsilon')
     plt.plot(times, norms_star, label='epsilon*')
