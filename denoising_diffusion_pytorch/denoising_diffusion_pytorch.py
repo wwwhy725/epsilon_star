@@ -814,10 +814,6 @@ class GaussianDiffusion(nn.Module):
 
         model_out = self.model(x, t, x_self_cond)
 
-        # penalty    tbd
-        lam = 1e-4
-        pen = torch.mean(model_out.norm(p=2, dim=(1, 2, 3)))
-
         if self.objective == 'pred_noise':
             target = noise
         elif self.objective == 'pred_x0':
@@ -832,16 +828,12 @@ class GaussianDiffusion(nn.Module):
         loss = reduce(loss, 'b ... -> b (...)', 'mean')
 
         loss = loss * extract(self.loss_weight, t, loss.shape)
-        return loss.mean() + lam * pen
+        return loss.mean()
 
     def forward(self, img, *args, **kwargs):
         b, c, h, w, device, img_size, = *img.shape, img.device, self.image_size
         assert h == img_size and w == img_size, f'height and width of image must be {img_size}'
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
-        # t = torch.randint(0, self.num_timesteps // 2, (b,), device=device).long()  # tbd 这里是让t从0到500随机采样！
-        # t = torch.randint(0, 200, (b,), device=device).long()  # tbd  我直接限制他只能训练前200个！ 对应文件名mnist50_t_200.ipynb
-        # t = torch.randint(500, 1000, (b,), device=device).long()  # tbd 我就限制他只能训练500-1000试试
-        # t = torch.full((b,), 400, device=device).long()  # 限制只能训练t = 200
 
         img = self.normalize(img)
         return self.p_losses(img, t, *args, **kwargs)
@@ -1109,16 +1101,8 @@ class Trainer(object):
                                 self.save("best")
                             self.save("latest")
                         else:
-                            # save_or_not = input(f'milestone={milestone}, save model? y/n')
-                            # if save_or_not == 'y':
-                            #     self.save(milestone)
-                            if milestone in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30]:
+                            if milestone in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
                                 self.save(milestone)
-                                # save the best model
-                                # if best_loss > total_loss:
-                                #     best_loss = total_loss
-                                #     self.save(milestone)
-                                #     print('save best model')
 
                 pbar.update(1)
 

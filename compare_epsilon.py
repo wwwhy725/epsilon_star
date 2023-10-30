@@ -86,12 +86,52 @@ def compare_cos_sim(args=args):
 
     plt.savefig(args.save_fig_path)
     plt.show()
-    
 
+def compare_loss(args=args):
+    gen_np = np.load(args.gen_path)
+    loader = np.load(args.train_path)
+
+    # model
+    model, _, _ = load_model(args=args)
+    model.eval()
+
+    # x
+    gen = torch.from_numpy(gen_np).to(device)
+
+    # noise
+    noise = torch.randn_like(gen).to(device)
+
+    # time
+    times = [i for i in range(1, 1001, 50)]
+
+    # loss
+    losses = []
+    losses_star = []
+    for time in times:
+        t = torch.full((args.batch_size,), time, device=device).long()
+        x = q_sample(gen, t, noise).to(torch.float32)
+        eps = model(x, t, x_self_cond=None)
+        eps_star = epsilon_star(x, t, loader, device)
+        loss = F.mse_loss(eps, noise)
+        loss_star = F.mse_loss(eps_star, noise)
+        losses.append(loss.item())
+        losses_star.append(loss_star.item())
+
+    plt.plot(times, losses, label='epsilon')
+    plt.plot(times, losses_star, label='epsilon*')
+    plt.legend()
+    
+    plt.xlabel('time')
+    plt.ylabel('loss')
+    plt.title('loss - time')
+    plt.savefig(args.save_fig_path, dpi=600)
+    plt.show()
+    
 
 def main():
     # compare_norm(args, 2)
     compare_cos_sim(args)
+    # compare_loss(args)
 
 if __name__ == '__main__':
     main()
