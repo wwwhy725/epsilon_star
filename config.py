@@ -8,17 +8,17 @@ class Args:
     This should show up in the helptext!"""
 
     """string"""
-    train_path: str = '/mnt/store/lyx/github_projs/why/DDPM/epsilon_star/cifar_5k/cifar_subset_5k.npy'  # training set path   'xxx.npy'  e.g. [5000, 3, 32, 32]
-    gen_path: str = '/mnt/store/lyx/github_projs/why/DDPM/new_gen.npy'  # a batch of generated new images   'xxx.npy'  e.g. [256, 3, 32, 32]
-    real_path: str = '/mnt/store/lyx/github_projs/why/DDPM/train_nn.npy'  # a batch of training images which are respectively closest to generated images  'xxx.npy'  e.g. [256, 3, 32, 32]
+    train_path: str = 'cifar_5k/cifar_subset_5k.npy'  # training set path   'xxx.npy'  e.g. [5000, 3, 32, 32]
+    gen_path: str = 'results/cifar_5k/new_gen.npy'  # a batch of generated new images   'xxx.npy'  e.g. [256, 3, 32, 32]
+    real_path: str = 'results/cifar_5k/train_nn.npy'  # a batch of training images which are respectively closest to generated images  'xxx.npy'  e.g. [256, 3, 32, 32]
     test_path: str = ''  # a batch of test images   'xx.npy'  e.g. [256, 3, 32, 32]
-    save_np_path: str = ''  # save as '.npy'
-    save_fig_path: str = 'try_cos_sim.png'  # save as '.png'
+    save_np_path: str = 'gen_img.npy'  # save as '.npy'
+    save_fig_path: str = 'fig.png'  # save as '.png'
     mode: str = 'trained'  # choose epsilon or epsilon*  --  trained  or  empirical
-    choice: str = 'gen'  # only used in gd_x0.py, values in ['noise', 'gen', 'intp', 'test'] --> to choose the initialization of gradient descent
+    choice: str = 'intp'  # only used in gd_x0.py, values in ['noise', 'gen', 'intp', 'test'] --> to choose the initialization of gradient descent
 
-    results_folder: str = './results_cifar10subset'  # from where to load diffusion checkpoint
-    folder: str = './epsilon_star/cifar_5k/cifar_5k_png'  # training data folder (in which images are all .png instead of .npy or other forms)
+    results_folder: str = './results_cifar_5k'  # from where to load diffusion checkpoint
+    folder: str = 'cifar_5k/cifar_5k_png'  # training data folder (in which images are all .png instead of .npy or other forms)
 
     gen_all_path: str = ''  # a batch of generated images, not necessarily different to train set!
 
@@ -28,7 +28,7 @@ class Args:
     """int number"""
     # basic config
     SEED: int = 42
-    ckpt: int = 30  # diffusion checkpoint
+    ckpt: int = 50  # diffusion checkpoint
     time: int = 10  # time for epsilon(x, t)
     
     # image config
