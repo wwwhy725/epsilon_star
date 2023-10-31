@@ -28,8 +28,8 @@ from denoising_diffusion_pytorch.version import __version__
 class DiffusionStar(nn.Module):
     def __init__(
         self,
-        *,
         model,
+        *,
         image_size,
         channels,
         train_path,
