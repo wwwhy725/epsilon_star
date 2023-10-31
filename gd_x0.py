@@ -139,12 +139,21 @@ def main():
     result_np = (result_np + 1) / 2.0
     x_ori =  (x_ori + 1) / 2.0
 
-    fig, axs = plt.subplots(2, batch_size, figsize=(15, 15))
-    for i in range(batch_size):
-        axs[0, i].imshow(result_np[i].transpose(1, 2, 0))  # after gradient descent -- a batch of images
-        axs[0, i].axis('off')
-        axs[1, i].imshow(x_ori[i].transpose(1, 2, 0))  # before gradient descent -- a batch of images
-        axs[1, i].axis('off')
+    fig, axs = plt.subplots(2, batch_size, figsize=(15, 15)) # tbd  这里会不会有点太多了
+    if args.channels == 3:
+        for i in range(batch_size):
+            axs[0, i].imshow(result_np[i].transpose(1, 2, 0))  # after gradient descent -- a batch of images
+            axs[0, i].axis('off')
+            axs[1, i].imshow(x_ori[i].transpose(1, 2, 0))  # before gradient descent -- a batch of images
+            axs[1, i].axis('off')
+    elif args.channels == 1:
+        for i in range(batch_size):
+            axs[0, i].imshow(result_np[i].transpose(1, 2, 0), cmap='gray')  # after gradient descent -- a batch of images
+            axs[0, i].axis('off')
+            axs[1, i].imshow(x_ori[i].transpose(1, 2, 0), cmap='gray')  # before gradient descent -- a batch of images
+            axs[1, i].axis('off')
+    else:
+        raise ValueError('channels have to be 1 or 3!')
     plt.tight_layout()
     # save
     plt.savefig(save_fig_path)

@@ -10,6 +10,7 @@ from PIL import Image
 from tqdm.auto import tqdm
 
 from utils import *
+from epsilon_star import epsilon_star
 
 
 # Setting reproducibility
@@ -33,7 +34,7 @@ def weighted_x0(x, t, epsilon, args=args):
     if args.mode == 'trained':
         model_out = epsilon(x, t, x_self_cond = None)
     elif args.mode == 'empirical':
-        model_out = epsilon(x, t, dataloader=loader, device=device)
+        model_out = epsilon_star(x, t, dataloader=loader, device=device)
     else:
         raise ValueError('mode have to be trained or empirical!')
 
