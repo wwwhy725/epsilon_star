@@ -156,21 +156,35 @@ class DiffusionStar(nn.Module):
         self.model = model
 
     # empirical min
-    def epsilon_star(self, x, t, dataloader):
+    """considering that the dataloader may be very large, we use batch to avoid OOM"""
+    def epsilon_star(self, x, t, dataloader, batch_size=5000):
         device = self.device
         b, c, h, w = x.shape  # take [256, 3, 32, 32] as an example
+        num_train = dataloader.shape[0]  # take 5k as an example
+        num_batches = (num_train + batch_size - 1) // batch_size
+
+        time = t[0].item()  # int number
+        alpha_bar = self.alphas_cumprod[time]  # float number
         # *********************************
-        time = t[0].item()
-        alpha_bar = self.alphas_cumprod[time]
-        train_data = torch.from_numpy(dataloader).to(device)
-        num_train = train_data.shape[0]  # take 5k as an example
-        batch_train_data = train_data.repeat(b, 1, 1, 1).reshape(b, num_train, c, h, w)  # [256, 5k, 3, 32, 32]
+        numerator = torch.empty(b, num_train)  # [256, 3, 32, 32]
+        denominator = 0.0
+        # deal with batch
+        for i in range(num_batches):
+            start_idx = i * batch_size
+            end_idx = min((i + 1) * batch_size, num_train)
+            train_data = torch.from_numpy(dataloader[start_idx:end_idx]).to(device)  # a batch of train data  [batch_size, 3, 32, 32]
+            batch_train_data = train_data.repeat(b, 1, 1, 1).reshape(b, train_data.shape[0], c, h, w)  # [256, batch_size, 3, 32, 32]
+            x_minus_x0 = x[:, None, :, :, :] - torch.sqrt(alpha_bar) * batch_train_data  # [256, batch_size, 3, 32, 32]
+            norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 / (-2 * (1 - alpha_bar))  # [256, batch_size]
 
-        x_minus_x0 = x[:, None, :, :, :] - torch.sqrt(alpha_bar) * batch_train_data  # [256, 5k, 3, 32, 32]
-        norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 / (-2 * (1 - alpha_bar))  # [256, 5k]
+            # softmax
+            # numerator -- a tensor: \sum [exp()*xi]
+            numerator += (torch.exp(norm)[:, :, None, None, None] * train_data[None, :, :, :, :]).sum(dim=1)  # [256, 3, 32, 32]
 
-        softmax = F.softmax(norm, dim=1)
-        weighted_x = (softmax[:, :, None, None, None] * train_data[None, :, :, :, :]).sum(dim=1)  # [256, 3, 32, 32]
+            # denominator -- a real number \sum exp()
+            denominator += torch.sum(torch.exp(norm), dim=1)  # [256, ]
+    
+        weighted_x = numerator / denominator[:, None, None, None]
 
         return x / torch.sqrt(1 - alpha_bar) - torch.sqrt(alpha_bar) / torch.sqrt(1 - alpha_bar) * weighted_x
 
