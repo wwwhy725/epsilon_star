@@ -157,7 +157,7 @@ class DiffusionStar(nn.Module):
 
     # empirical min
     """considering that the dataloader may be very large, we use batch to avoid OOM"""
-    def epsilon_star(self, x, t, dataloader, batch_size=5000):
+    def epsilon_star_batch(self, x, t, dataloader, batch_size=5000):
         device = self.device
         b, c, h, w = x.shape  # take [256, 3, 32, 32] as an example
         num_train = dataloader.shape[0]  # take 5k as an example
@@ -166,8 +166,8 @@ class DiffusionStar(nn.Module):
         time = t[0].item()  # int number
         alpha_bar = self.alphas_cumprod[time]  # float number
         # *********************************
-        numerator = torch.empty(b, num_train)  # [256, 3, 32, 32]
-        denominator = 0.0
+        numerator = torch.empty(b, c, h, w).to(device)  # [256, 3, 32, 32]
+        denominator = torch.empty(b).to(device)
         # deal with batch
         for i in range(num_batches):
             start_idx = i * batch_size
@@ -185,6 +185,26 @@ class DiffusionStar(nn.Module):
             denominator += torch.sum(torch.exp(norm), dim=1)  # [256, ]
     
         weighted_x = numerator / denominator[:, None, None, None]
+
+        return x / torch.sqrt(1 - alpha_bar) - torch.sqrt(alpha_bar) / torch.sqrt(1 - alpha_bar) * weighted_x
+    
+    # empirical min
+    """if the dataloader is not that large, use this one to accelerate sampling"""
+    def epsilon_star(self, x, t, dataloader):
+        device = self.device
+        b, c, h, w = x.shape  # take [256, 3, 32, 32] as an example
+        # *********************************
+        time = t[0].item()
+        alpha_bar = self.alphas_cumprod[time]
+        train_data = torch.from_numpy(dataloader).to(device)
+        num_train = train_data.shape[0]  # take 5k as an example
+        batch_train_data = train_data.repeat(b, 1, 1, 1).reshape(b, num_train, c, h, w)  # [256, 5k, 3, 32, 32]
+
+        x_minus_x0 = x[:, None, :, :, :] - torch.sqrt(alpha_bar) * batch_train_data  # [256, 5k, 3, 32, 32]
+        norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 / (-2 * (1 - alpha_bar))  # [256, 5k]
+
+        softmax = F.softmax(norm, dim=1)
+        weighted_x = (softmax[:, :, None, None, None] * train_data[None, :, :, :, :]).sum(dim=1)  # [256, 3, 32, 32]
 
         return x / torch.sqrt(1 - alpha_bar) - torch.sqrt(alpha_bar) / torch.sqrt(1 - alpha_bar) * weighted_x
 
@@ -224,7 +244,7 @@ class DiffusionStar(nn.Module):
     def model_predictions(self, x, t, x_self_cond = None, clip_x_start = False, rederive_pred_noise = False):  # tbd  !!!  here the mix sampling
         time = int(t[0].item())
         if self.t_start < time and time < self.t_end:
-            model_output = self.epsilon_star(x, t, self.loader)
+            model_output = self.epsilon_star_batch(x, t, self.loader)  # here use batch if OOM
         else:
             model_output = self.model(x, t, x_self_cond)
         # model_output = self.epsilon_star(x, t, self.loader)
