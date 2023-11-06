@@ -46,6 +46,49 @@ def epsilon_star(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray, device):
 
     return x / torch.sqrt(1 - alpha_bar) - torch.sqrt(alpha_bar) / torch.sqrt(1 - alpha_bar) * weighted_x
 
+def epsilon_star_batch(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray, device):
+    b_size=5000  # if cuda OOM, decrease b_size!
+    b, c, h, w = x.shape  # take [256, 3, 32, 32] as an example
+    num_train = dataloader.shape[0]  # take 5k as an example
+    num_batches = (num_train + b_size - 1) // b_size
+
+    time = t[0].item()  # int number
+    alpha_bar = alphas_cumprod[time]  # float number
+    # *********************************
+    numerator = torch.zeros(b, c, h, w).to(device)  # [256, 3, 32, 32]
+    denominator = torch.zeros(b).to(device)
+    # deal with batch
+    max_norm = -torch.inf * torch.ones(b).to(device)
+    for i in range(num_batches):
+        start_idx = i * b_size
+        end_idx = min((i + 1) * b_size, num_train)
+        train_data = torch.from_numpy(dataloader[start_idx:end_idx]).to(device)  # a batch of train data  [batch_size, 3, 32, 32]
+        batch_train_data = train_data.repeat(b, 1, 1, 1).reshape(b, train_data.shape[0], c, h, w)  # [256, batch_size, 3, 32, 32]
+        x_minus_x0 = x[:, None, :, :, :] - torch.sqrt(alpha_bar) * batch_train_data  # [256, batch_size, 3, 32, 32]
+        norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 / (-2 * (1 - alpha_bar))  # [256, batch_size]
+
+        # max of norm
+        max_norm = torch.max(max_norm, norm.max(dim=1)[0])
+
+    for i in range(num_batches):
+        start_idx = i * b_size
+        end_idx = min((i + 1) * b_size, num_train)
+        train_data = torch.from_numpy(dataloader[start_idx:end_idx]).to(device)  # a batch of train data  [batch_size, 3, 32, 32]
+        batch_train_data = train_data.repeat(b, 1, 1, 1).reshape(b, train_data.shape[0], c, h, w)  # [256, batch_size, 3, 32, 32]
+        x_minus_x0 = x[:, None, :, :, :] - torch.sqrt(alpha_bar) * batch_train_data  # [256, batch_size, 3, 32, 32]
+        norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 / (-2 * (1 - alpha_bar))  # [256, batch_size]
+
+        # softmax
+        # numerator -- a tensor: \sum [exp()*xi]
+        numerator += (torch.exp(norm - max_norm[:, None])[:, :, None, None, None] * train_data[None, :, :, :, :]).sum(dim=1)  # [256, 3, 32, 32]
+
+        # denominator -- a real number \sum exp()
+        denominator += torch.sum(torch.exp(norm - max_norm[:, None]), dim=1)  # [256, ]
+
+    weighted_x = numerator / denominator[:, None, None, None]    
+
+    return x / torch.sqrt(1 - alpha_bar) - torch.sqrt(alpha_bar) / torch.sqrt(1 - alpha_bar) * weighted_x
+
 
 def main():  # 一个拿到epsilon_star的模板
     # load data
@@ -73,7 +116,7 @@ def main():  # 一个拿到epsilon_star的模板
     x_input = q_sample(x, t, noise).to(torch.float32)
 
     # epsilon*
-    eps_star = epsilon_star(x_input, t, loader, device=device)
+    eps_star = epsilon_star_batch(x_input, t, loader, device=device)
 
 
 if __name__ == '__main__':
