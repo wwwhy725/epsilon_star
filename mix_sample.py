@@ -447,7 +447,7 @@ def mix_sample(args=args):
     gen = mix_diffusion.sample(batch_size=args.batch_size)
 
     gen_np = gen.cpu().detach().numpy()
-    np.save(args.save_np_path, gen_np)
+    np.save(os.path.join(args.log_path, 'gen_img.npy'), gen_np)
 
     return gen
 

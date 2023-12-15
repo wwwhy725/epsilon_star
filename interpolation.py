@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import os
 import math
 import copy
 from pathlib import Path
@@ -21,6 +22,50 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}\t" +
       (f"{torch.cuda.get_device_name(0)}" if torch.cuda.is_available() else "CPU"))
 
+def hist_plot(a:np.ndarray, b:np.ndarray, lam):
+    a, b = normalize_to_255(a), normalize_to_255(b)
+    a, b = a.astype(np.int64), b.astype(np.int64)
+    a = a.mean(axis=2)
+    b = b.mean(axis=2)
+    error = np.abs(a - b)
+    error_flat = error.flatten()
+
+    plt.hist(error_flat, bins=30, range=(0, 30))
+    plt.xlabel('Pixel Error')
+    plt.ylabel('Frequency')
+    plt.title('Pixel Error Histogram')
+    plt.savefig(os.path.join(args.log_path, f'hist_{lam}.png'))
+    plt.show()
+    plt.close()
+
+def scatter_plot(a:np.ndarray, b:np.ndarray, lam):
+    a, b = normalize_to_255(a), normalize_to_255(b)
+    a, b = a.astype(np.int64), b.astype(np.int64)
+    # a = a.mean(axis=2)
+    # b = b.mean(axis=2)
+    error = np.abs(a - b)
+    error_avg = np.mean(error, axis=2)
+
+    x = np.arange(a.shape[0])
+    y = np.arange(a.shape[1])
+    X, Y = np.meshgrid(x, y)
+
+    # 创建图形对象和子图对象
+    fig, ax = plt.subplots()
+
+    # 获取当前坐标轴对象，并设置其属性
+    ax = plt.gca()
+    ax.invert_yaxis()  # 反转y轴方向
+    ax.xaxis.tick_top()  # x轴刻度标签置于顶部
+
+    plt.scatter(X, Y, c=error_avg, cmap='jet', s=1)
+    plt.colorbar()
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('Pixel Error')
+    plt.savefig(os.path.join(args.log_path, f'scatter_{lam}.png'))
+    plt.show()
+    plt.close()
 # ****************************************
 '''
 interpolation between generated new images and nearest neighbor in training set
@@ -43,21 +88,12 @@ def interpolation(
     # calculate the L2 distance between interpolation and x_hat
     dist = (intp - cal_x).norm(p=2, dim=(1, 2, 3))
     dist_np = dist.cpu().detach().numpy()
-    '''
-    # 显示图像
-    if show_pic:
-        intp_np = intp.cpu().detach().numpy()
-        # intp_np = intp_np.reshape(b, c, w, h)
-        fig, axs = plt.subplots(1, b, figsize=(10, 6))
-        axs = axs.flatten()
 
-        for i in range(b):
-            axs[i].imshow(intp_np[i], cmap='gray')
-            axs[i].axis('off')
-
-        plt.tight_layout()
-        plt.show()
-    '''
+    # plot hist and scatter
+    kk = 124
+    hist_plot(intp[kk].cpu().detach().numpy().transpose(1, 2, 0), cal_x[kk].cpu().detach().numpy().transpose(1, 2, 0), lam)
+    scatter_plot(intp[kk].cpu().detach().numpy().transpose(1, 2, 0), cal_x[kk].cpu().detach().numpy().transpose(1, 2, 0), lam)
+    
     return dist_np  # numpy array: a batch of image be processed at the same time
 
 def interpolate():
@@ -97,7 +133,7 @@ def interpolate():
     plt.plot(x_axis, dist)
     plt.xlabel('lambda')
     plt.ylabel('l2 distance')
-    plt.savefig('interpolation-distances.png')
+    plt.savefig(os.path.join(args.log_path, 'interpolation-distances.png'))
     plt.show()
 
 # *******************************************

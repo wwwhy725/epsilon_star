@@ -8,9 +8,10 @@ from functools import partial
 from collections import namedtuple
 from multiprocessing import cpu_count
 import numpy as np
-import wandb
+from torch.optim.lr_scheduler import LambdaLR
 
 import torch
+from tensorboardX import SummaryWriter
 from torch import nn, einsum
 from torch.cuda.amp import autocast
 import torch.nn.functional as F
@@ -944,6 +945,9 @@ class Trainer(object):
         # optimizer
 
         self.opt = Adam(diffusion_model.parameters(), lr = train_lr, betas = adam_betas)
+        warmup = 5000
+        self.schedule = LambdaLR(self.opt, lr_lambda=lambda step: min(1.0, step / warmup))
+        print('we have warmup:', warmup)
 
         # for logging results in a folder periodically
 
@@ -960,7 +964,7 @@ class Trainer(object):
 
         # prepare model, dataloader, optimizer with accelerator
 
-        self.model, self.opt = self.accelerator.prepare(self.model, self.opt)
+        self.model, self.opt, self.schedule = self.accelerator.prepare(self.model, self.opt, self.schedule)  # add warmup
 
         # FID-score computation
 
@@ -1038,6 +1042,8 @@ class Trainer(object):
             self.accelerator.scaler.load_state_dict(data['scaler'])
 
     def train(self):
+        writer = SummaryWriter(self.results_folder)  # tensorboard
+
         accelerator = self.accelerator
         device = accelerator.device
         best_loss = float("inf")
@@ -1059,12 +1065,13 @@ class Trainer(object):
                     self.accelerator.backward(loss)
 
                 accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                writer.add_scalar('loss', total_loss, self.step)
                 pbar.set_description(f'loss: {total_loss:.4f}')
-                # wandb.log({'loss': total_loss})  # wandb显示loss
 
                 accelerator.wait_for_everyone()
 
                 self.opt.step()
+                self.schedule.step()  # warmup
                 self.opt.zero_grad()
 
                 accelerator.wait_for_everyone()
@@ -1078,17 +1085,17 @@ class Trainer(object):
 
                         with torch.inference_mode():
                             milestone = self.step // self.save_and_sample_every
-                            # if milestone % 10 == 0:
-                            batches = num_to_groups(self.num_samples, self.batch_size)
-                            all_images_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n), batches))
-                            # else:
-                            #     print('milestone: ', milestone)
-                            #     print('skip sampling to save time')
+                            if milestone % 5 == 0:
+                                batches = num_to_groups(self.num_samples, self.batch_size)
+                                all_images_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n), batches))
+                            else:
+                                print('milestone: ', milestone)
+                                print('skip sampling to save time')
 
-                        # if milestone % 10 == 0:
-                        all_images = torch.cat(all_images_list, dim = 0)
+                        if milestone % 5 == 0:
+                            all_images = torch.cat(all_images_list, dim = 0)
 
-                        utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
+                            utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
 
                         # whether to calculate fid
 
@@ -1101,9 +1108,10 @@ class Trainer(object):
                                 self.save("best")
                             self.save("latest")
                         else:
-                            if milestone in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
+                            if milestone % 10 == 0 and milestone > 30:
                                 self.save(milestone)
 
                 pbar.update(1)
 
         accelerator.print('training complete')
+        writer.close()

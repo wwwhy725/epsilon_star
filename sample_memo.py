@@ -112,7 +112,7 @@ def sample_memo_visualization(samples:torch.Tensor, args=args):
     else:
         raise ValueError('channels have to be 1 or 3!')
     plt.axis('off')
-    plt.savefig(args.save_fig_path)
+    plt.savefig(os.path.join(args.log_path, 'sample.png'))
     plt.show()
 
 
@@ -181,7 +181,7 @@ def main():
     # plt.figure(figsize=(30, 30))
     plt.imshow(canvas)
     plt.axis('off')
-    plt.savefig(args.save_fig_path)
+    plt.savefig(os.path.join(args.log_path, 'sample.png'))
     plt.show()
 
 

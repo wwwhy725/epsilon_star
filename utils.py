@@ -136,7 +136,7 @@ def get_trainloader(image_size, channel, batch_size, train_path):
 def load_model(args=args):
     if args.channels == 1:
         model = Unet(
-        dim = 64,
+        dim = args.dim,
         dim_mults = (1, 2),
         channels = args.channels,
         full_attn = (False, True),
@@ -144,7 +144,7 @@ def load_model(args=args):
         )
     elif args.channels == 3:
         model = Unet(
-        dim = 64,
+        dim = args.dim,
         dim_mults = (1, 2, 4, 8),
         channels = args.channels,
         flash_attn = True
@@ -201,3 +201,11 @@ def normalize(arr: np.ndarray):
             arr = arr * 2 - 1.0
     
     return arr
+
+def normalize_to_255(image):
+    # normalize image to 0-255
+    image = image - image.min()
+    image /= image.max()
+    image *= 255
+    image = image.astype(np.uint8)
+    return image

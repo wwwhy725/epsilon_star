@@ -14,6 +14,7 @@ class Args:
     test_path: str = ''  # a batch of test images   'xx.npy'  e.g. [256, 3, 32, 32]
     save_np_path: str = 'gen_img.npy'  # save as '.npy'
     save_fig_path: str = 'fig.png'  # save as '.png'
+    log_path: str = './epsilon_star/logs/celeba_10k'
     mode: str = 'trained'  # choose epsilon or epsilon*  --  trained  or  empirical
     choice: str = 'intp'  # only used in gd_x0.py, values in ['noise', 'gen', 'intp', 'test'] --> to choose the initialization of gradient descent
 
@@ -30,6 +31,7 @@ class Args:
     SEED: int = 42
     ckpt: int = 50  # diffusion checkpoint
     time: int = 10  # time for epsilon(x, t)
+    dim: int = 64  # size of unet
     
     # image config
     image_size: int = 32  # if square, h = w = image_size
