@@ -6,6 +6,7 @@ from random import random
 import random
 from functools import partial
 import numpy as np
+from typing import Union
 
 import torch
 from torch import nn, einsum
@@ -51,6 +52,9 @@ alphas = 1. - betas
 alphas_cumprod = torch.cumprod(alphas, dim=0)
 sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
 sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
+alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value = 1.)
+recip_sqrt_one_minus_alphas_cumprod = torch.sqrt(1. /(1. - alphas_cumprod))
+sqrt_alphas_cumprod_divide_one_minus_alphas_cumprod = torch.sqrt(alphas_cumprod/(1. - alphas_cumprod))
 
 def exists(x):
     return x is not None
@@ -190,17 +194,34 @@ def save_numpy_image(image, path):
     image = Image.fromarray(image)
     image.save(path)
 
-def normalize(arr: np.ndarray):
-    # [0, 255] to [-1, 1]
-    if arr.dtype == np.uint8:
-        arr = arr.astype(np.float32) / 255.0
-        arr = arr * 2 - 1.0
-    # [0, 1] to [-1, 1]
-    elif arr.dtype == np.float32:
-        if arr.min() == 0.0:
+def normalize(arr: Union[np.ndarray, torch.Tensor]):
+    """[0, 255]&[0, 1] to [-1, 1]"""
+    if type(arr) == np.ndarray:
+        if arr.dtype == np.uint8:
+            arr = arr.astype(np.float32) / 255.0
             arr = arr * 2 - 1.0
+        # [0, 1] to [-1, 1]
+        elif arr.dtype == np.float32:
+            if arr.min() == 0.0:
+                arr = arr * 2 - 1.0
+        else:
+            raise TypeError("input should be np.ndarray or torch.Tensor, dtype should be either uint8 or float32!")
+    elif type(arr) == torch.Tensor:
+        if arr.dtype == torch.uint8:
+            arr = arr.astype(torch.float32) / 255.0
+            arr = arr * 2 - 1.0
+        # [0, 1] to [-1, 1]
+        elif arr.dtype == torch.float32:
+            if arr.min() == 0.0:
+                arr = arr * 2 - 1.0
+        else:
+            raise TypeError("input should be np.ndarray or torch.Tensor, dtype should be either uint8 or float32!")
     
     return arr
+
+def unnormalize(arr: Union[np.ndarray, torch.Tensor]):
+    """[-1, 1] to [0, 1]"""
+    return (arr + 1) / 2.0
 
 def normalize_to_255(image):
     # normalize image to 0-255

@@ -1,4 +1,4 @@
-from epsilon_star import epsilon_star
+from eps_star import epsilon_star
 from utils import *
 import matplotlib.pyplot as plt
 

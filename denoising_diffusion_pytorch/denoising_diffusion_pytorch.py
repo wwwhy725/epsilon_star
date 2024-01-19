@@ -842,6 +842,7 @@ class GaussianDiffusion(nn.Module):
 # dataset classes
 
 class Dataset(Dataset):
+    '''build training dataset from a folder with pictures'''
     def __init__(
         self,
         folder,
@@ -872,6 +873,26 @@ class Dataset(Dataset):
         path = self.paths[index]
         img = Image.open(path)
         return self.transform(img)
+
+class Dataset_fromnp(Dataset):
+    '''build training dataset from a np array'''
+    def __init__(
+        self, 
+        np_path,  # path/to/numpy/array
+        image_size,
+        augment_horizontal_flip = False,
+        convert_image_to = None
+    ):
+        super().__init__()
+        self.path = np_path
+        self.data = np.load(np_path)
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, index):
+        img = torch.tensor(self.data[index])
+        return img
 
 # trainer class
 

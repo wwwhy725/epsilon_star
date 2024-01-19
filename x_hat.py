@@ -10,7 +10,7 @@ from PIL import Image
 from tqdm.auto import tqdm
 
 from utils import *
-from epsilon_star import epsilon_star_batch, epsilon_star
+from eps_star import epsilon_star_batch, epsilon_star
 
 
 # Setting reproducibility

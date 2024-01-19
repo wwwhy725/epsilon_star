@@ -32,28 +32,33 @@ print(f"Using device: {device}\t" +
 def epsilon_star(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray, device):
     b, c, w, h = x.shape  # take [256, 3, 32, 32] as an example
 
-    time = t[0].item()
-    alpha_bar = alphas_cumprod[time]
+    coef_deno = 1. / (-2 * (1. - alphas_cumprod))
+    coef_x = 1. / torch.sqrt(1. - alphas_cumprod)
+    coef_x_hat = sqrt_alphas_cumprod / torch.sqrt(1. - alphas_cumprod)
+
     train_data = torch.from_numpy(dataloader).to(device)
     num_train = train_data.shape[0]  # take 5k as an example
     batch_train_data = train_data.repeat(b, 1, 1, 1).reshape(b, num_train, c, w, h)  # [256, 5k, 3, 32, 32]
 
-    x_minus_x0 = x[:, None, :, :, :] - torch.sqrt(alpha_bar) * batch_train_data  # [256, 5k, 3, 32, 32]
-    norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 / (-2 * (1 - alpha_bar))  # [256, 5k]
+    x_minus_x0 = x[:, None, :, :, :] - extract(sqrt_alphas_cumprod, t, batch_train_data.shape) * batch_train_data  # [256, 5k, 3, 32, 32]
+    norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2  # [256, 5k]
+    norm = extract(coef_deno, t, norm.shape) * norm
 
     softmax = F.softmax(norm, dim=1)
     weighted_x = (softmax[:, :, None, None, None] * train_data[None, :, :, :, :]).sum(dim=1)  # [256, 3, 32, 32]
 
-    return x / torch.sqrt(1 - alpha_bar) - torch.sqrt(alpha_bar) / torch.sqrt(1 - alpha_bar) * weighted_x
+    return extract(coef_x, t, x.shape) * x - extract(coef_x_hat, t, weighted_x.shape) * weighted_x
 
-def epsilon_star_batch(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray, device):
-    b_size=5000  # if cuda OOM, decrease b_size!
+def eps_star_batch(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray, device):
+    b_size=5000
     b, c, h, w = x.shape  # take [256, 3, 32, 32] as an example
     num_train = dataloader.shape[0]  # take 5k as an example
     num_batches = (num_train + b_size - 1) // b_size
 
-    time = t[0].item()  # int number
-    alpha_bar = alphas_cumprod[time]  # float number
+    coef_deno = 1. / (-2 * (1. - alphas_cumprod))
+    coef_x = 1. / torch.sqrt(1. - alphas_cumprod)
+    coef_x_hat = sqrt_alphas_cumprod / torch.sqrt(1. - alphas_cumprod)
+
     # *********************************
     numerator = torch.zeros(b, c, h, w).to(device)  # [256, 3, 32, 32]
     denominator = torch.zeros(b).to(device)
@@ -64,9 +69,9 @@ def epsilon_star_batch(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray, de
         end_idx = min((i + 1) * b_size, num_train)
         train_data = torch.from_numpy(dataloader[start_idx:end_idx]).to(device)  # a batch of train data  [batch_size, 3, 32, 32]
         batch_train_data = train_data.repeat(b, 1, 1, 1).reshape(b, train_data.shape[0], c, h, w)  # [256, batch_size, 3, 32, 32]
-        x_minus_x0 = x[:, None, :, :, :] - torch.sqrt(alpha_bar) * batch_train_data  # [256, batch_size, 3, 32, 32]
-        norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 / (-2 * (1 - alpha_bar))  # [256, batch_size]
-
+        x_minus_x0 = x[:, None, :, :, :] - extract(sqrt_alphas_cumprod, t, batch_train_data.shape) * batch_train_data
+        norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 # / (-2 * (1 - alpha_bar))  # [256, batch_size]
+        norm = extract(coef_deno, t, norm.shape) * norm
         # max of norm
         max_norm = torch.max(max_norm, norm.max(dim=1)[0])
 
@@ -75,9 +80,9 @@ def epsilon_star_batch(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray, de
         end_idx = min((i + 1) * b_size, num_train)
         train_data = torch.from_numpy(dataloader[start_idx:end_idx]).to(device)  # a batch of train data  [batch_size, 3, 32, 32]
         batch_train_data = train_data.repeat(b, 1, 1, 1).reshape(b, train_data.shape[0], c, h, w)  # [256, batch_size, 3, 32, 32]
-        x_minus_x0 = x[:, None, :, :, :] - torch.sqrt(alpha_bar) * batch_train_data  # [256, batch_size, 3, 32, 32]
-        norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 / (-2 * (1 - alpha_bar))  # [256, batch_size]
-
+        x_minus_x0 = x[:, None, :, :, :] - extract(sqrt_alphas_cumprod, t, batch_train_data.shape) * batch_train_data
+        norm = x_minus_x0.norm(p=2, dim=(2, 3, 4)) ** 2 # / (-2 * (1 - alpha_bar))  # [256, batch_size]
+        norm = extract(coef_deno, t, norm.shape) * norm
         # softmax
         # numerator -- a tensor: \sum [exp()*xi]
         numerator += (torch.exp(norm - max_norm[:, None])[:, :, None, None, None] * train_data[None, :, :, :, :]).sum(dim=1)  # [256, 3, 32, 32]
@@ -87,7 +92,7 @@ def epsilon_star_batch(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray, de
 
     weighted_x = numerator / denominator[:, None, None, None]    
 
-    return x / torch.sqrt(1 - alpha_bar) - torch.sqrt(alpha_bar) / torch.sqrt(1 - alpha_bar) * weighted_x
+    return extract(coef_x, t, x.shape) * x - extract(coef_x_hat, t, weighted_x.shape) * weighted_x
 
 def eps_star_fix_t(x:torch.Tensor):
     b_size=5000  # if cuda OOM, decrease b_size!
@@ -154,6 +159,38 @@ def eps_star_jacobian(x:torch.Tensor, t:torch.Tensor, dataloader:np.ndarray):
     # calculate
     result = torch.matmul(x0_vector.T, x_minus_x0_vector)
     
+    return result
+
+def diff_sample_selfcustom(model, batch_size=16, return_all=False):
+    """toy code, only for test or easily sample from eps_star or a trained model"""
+    c, h, w = args.channles, args.image_size, args.image_size
+    start_time, end_time = 0, 1000  # can be changed
+
+    sigma = torch.sqrt(betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod))
+    eps_star_coef = betas / torch.sqrt(alphas*(1. - alphas_cumprod))
+    x_coef = 1. / torch.sqrt(alphas)
+
+
+    data = torch.randn(batch_size, c, h, w)
+    data_list = [data]
+    for t in tqdm(reversed(range(start_time, end_time)), desc = 'sampling loop time step', total = end_time-start_time):
+        # time
+        batched_time = torch.full((batch_size,), t, device=device).long()
+        # trained model or eps_star
+        eps = model(data, batched_time)
+        # noise
+        z = torch.randn_like(data)
+        # gamma_t
+        gamma_t = extract(eps_star_coef, batched_time, data.shape)*eps - extract(sigma, batched_time, z.shape)*z
+        # iter
+        data = extract(x_coef, batched_time, data.shape)*data - gamma_t
+        # record data
+        data_list.append(data)
+
+    result = torch.stack(data_list, dim=1) if return_all else data
+
+    # unnormalize(result)  # whether to normalize or unnormalize
+
     return result
 
 
